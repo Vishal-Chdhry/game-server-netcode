@@ -1,25 +1,40 @@
-use std::net::SocketAddr;
+use std::{
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use anyhow::Result;
-use axum::{routing::get, Router};
+use axum::{routing::get, Extension, Router};
 
-// basic handler that responds with a static string
-async fn root() -> &'static str {
-    "Hello, World!"
+struct State {
+    pub count: AtomicUsize,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // build our application with a route
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root));
+    let shared_state = Arc::new(State {
+        count: AtomicUsize::new(0),
+    });
 
-    let addr = SocketAddr::from(([0, 0, 0, 1], 42069));
+    let app = Router::new()
+        .route("/", get(handler))
+        .layer(Extension(shared_state));
+
+    // run our app with hyper
+    // `axum::Server` is a re-export of `hyper::Server`
+    let addr = SocketAddr::from(([0, 0, 0, 0], 42070));
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
         .unwrap();
 
     return Ok(());
+}
+
+async fn handler(Extension(state): Extension<Arc<State>>) -> String {
+    let count = state.count.fetch_add(1, Ordering::Relaxed);
+    return format!("count is {}", count);
 }
