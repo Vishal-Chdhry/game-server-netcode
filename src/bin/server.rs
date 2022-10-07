@@ -1,3 +1,6 @@
+use anyhow::Result;
+use axum::{extract::Query, routing::get, Extension, Router};
+use serde::Deserialize;
 use std::{
     net::SocketAddr,
     sync::{
@@ -5,9 +8,6 @@ use std::{
         Arc,
     },
 };
-
-use anyhow::Result;
-use axum::{routing::get, Extension, Router};
 
 struct State {
     pub count: AtomicUsize,
@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
     });
 
     let app = Router::new()
-        .route("/", get(handler))
+        .route("/join", get(handler))
         .layer(Extension(shared_state));
 
     // run our app with hyper
@@ -34,7 +34,16 @@ async fn main() -> Result<()> {
     return Ok(());
 }
 
-async fn handler(Extension(state): Extension<Arc<State>>) -> String {
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct JoinParams {
+    version: Option<u8>,
+    uuid: Option<String>,
+}
+async fn handler(
+    Query(params): Query<JoinParams>,
+    Extension(state): Extension<Arc<State>>,
+) -> String {
     let count = state.count.fetch_add(1, Ordering::Relaxed);
-    return format!("count is {}", count);
+    return format!("count is {} {:?}", count, params);
 }
