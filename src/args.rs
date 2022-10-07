@@ -8,4 +8,7 @@ pub struct ServerArgs {
 
     #[clap(long = "servers")]
     pub servers: Vec<String>,
+
+    #[clap(long = "version")]
+    pub version: u8,
 }
