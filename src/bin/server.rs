@@ -12,31 +12,53 @@ use game_server::{args::ServerArgs, version::VERSION};
 use log::{error, warn};
 use serde::Deserialize;
 use std::{
-    net::{SocketAddr, TcpStream},
+    collections::HashMap,
+    net::SocketAddr,
+    stream,
     sync::{Arc, RwLock},
-    vec,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
 };
 use uuid::Uuid;
 
+struct ServerInfo {
+    player_count: u8,
+    game_count: usize,
+}
+
 struct ServerState {
     args: ServerArgs,
-    conns: Vec<TcpStream>,
+    servers: HashMap<String, ServerInfo>,
 }
 
 type State = Arc<RwLock<ServerState>>;
 
+async fn read_server_updates(server: String, mut stream: tokio::net::TcpStream, state: State) {
+    stream.write([]);
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
-    let args = ServerArgs::parse();
 
+    let args = ServerArgs::parse();
+    let shared_state = Arc::new(RwLock::new(ServerState {
+        servers: HashMap::new(),
+        args,
+    }));
     warn!("Starting server with {:?}", args);
 
-    let mut conns = vec![];
-
     for server in &args.servers {
-        match TcpStream::connect(server) {
-            Ok(stream) => conns.push(stream),
+        match TcpStream::connect(server).await {
+            Ok(stream) => {
+                let info = ServerInfo {
+                    player_count: 0,
+                    game_count: 0,
+                };
+                read_server_updates(server.to_string(), stream, shared_state.clone());
+            }
             Err(e) => {
                 error!(
                     "recieved an error establisheing a TCP connection to {} {}",
@@ -45,8 +67,6 @@ async fn main() -> Result<()> {
             }
         }
     }
-
-    let shared_state = Arc::new(RwLock::new(ServerState { conns, args }));
 
     let app = Router::new()
         .route("/join", get(handler))
@@ -70,9 +90,7 @@ struct JoinParams {
     uuid: Option<Uuid>,
 }
 
-async fn find_server(state: State) -> String {
-    return String::from("");
-}
+// async fn find_server(state: State) -> String {}
 
 async fn handler(
     Query(params): Query<JoinParams>,
