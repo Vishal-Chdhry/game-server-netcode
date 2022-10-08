@@ -1,1 +1,1 @@
-pub const VERSION: u8 = 1;
+pub const VERSION: usize = 1;

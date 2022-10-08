@@ -1,6 +1,6 @@
 use clap::Parser;
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[clap()]
 pub struct ServerArgs {
     #[clap(long = "players", short = 'p', default_value_t = 100)]
@@ -8,7 +8,4 @@ pub struct ServerArgs {
 
     #[clap(long = "servers")]
     pub servers: Vec<String>,
-
-    #[clap(long = "version")]
-    pub version: u8,
 }

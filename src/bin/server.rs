@@ -8,16 +8,45 @@ use axum::{
     Router,
 };
 use clap::Parser;
-use game_server::args::ServerArgs;
+use game_server::{args::ServerArgs, version::VERSION};
+use log::{error, warn};
 use serde::Deserialize;
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{SocketAddr, TcpStream},
+    sync::{Arc, RwLock},
+    vec,
+};
+use uuid::Uuid;
 
-type State = Arc<ServerArgs>;
+struct ServerState {
+    args: ServerArgs,
+    conns: Vec<TcpStream>,
+}
+
+type State = Arc<RwLock<ServerState>>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
     let args = ServerArgs::parse();
-    let shared_state = Arc::new(args);
+
+    warn!("Starting server with {:?}", args);
+
+    let mut conns = vec![];
+
+    for server in &args.servers {
+        match TcpStream::connect(server) {
+            Ok(stream) => conns.push(stream),
+            Err(e) => {
+                error!(
+                    "recieved an error establisheing a TCP connection to {} {}",
+                    server, e
+                );
+            }
+        }
+    }
+
+    let shared_state = Arc::new(RwLock::new(ServerState { conns, args }));
 
     let app = Router::new()
         .route("/join", get(handler))
@@ -37,15 +66,20 @@ async fn main() -> Result<()> {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct JoinParams {
-    version: Option<u8>,
-    uuid: Option<String>,
+    version: Option<usize>,
+    uuid: Option<Uuid>,
 }
+
+async fn find_server(state: State) -> String {
+    return String::from("");
+}
+
 async fn handler(
     Query(params): Query<JoinParams>,
-    Extension(state): Extension<State>,
+    Extension(_state): Extension<State>,
 ) -> Result<String, AppError> {
     if let Some(v) = params.version {
-        if v != state.version {
+        if v != VERSION {
             return Err(anyhow::anyhow!("version out of date -- please update").into());
         }
     } else {
