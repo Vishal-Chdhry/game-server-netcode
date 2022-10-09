@@ -1,27 +1,18 @@
 use anyhow::Result;
-use axum::{
-    extract::Extension,
-    extract::Query,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
-};
+use axum::extract::Query;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::{extract::Extension, routing::get, Router};
 use clap::Parser;
-use game_server::{args::ServerArgs, version::VERSION};
 use log::{error, warn};
 use serde::Deserialize;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    stream,
-    sync::{Arc, RwLock},
-};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::{Arc, RwLock};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 use uuid::Uuid;
+use vim_royale::args::ServerArgs;
 
 struct ServerInfo {
     player_count: u8,
@@ -34,34 +25,35 @@ struct ServerState {
 }
 
 type State = Arc<RwLock<ServerState>>;
+const VERSION: usize = 69;
 
-async fn read_server_updates(server: String, mut stream: tokio::net::TcpStream, state: State) {
-    stream.write([]);
-}
+async fn read_server_updates(server: String, mut stream: TcpStream, state: State) {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
 
     let args = ServerArgs::parse();
+    warn!("starting server with: {:?}", args);
+    let servers = args.servers.clone();
     let shared_state = Arc::new(RwLock::new(ServerState {
         servers: HashMap::new(),
         args,
     }));
-    warn!("Starting server with {:?}", args);
 
-    for server in &args.servers {
+    for server in &servers {
         match TcpStream::connect(server).await {
             Ok(stream) => {
                 let info = ServerInfo {
                     player_count: 0,
                     game_count: 0,
                 };
+
                 read_server_updates(server.to_string(), stream, shared_state.clone());
             }
             Err(e) => {
                 error!(
-                    "recieved an error establisheing a TCP connection to {} {}",
+                    "received an error establishing the tcp connection to {} {}",
                     server, e
                 );
             }
@@ -74,7 +66,7 @@ async fn main() -> Result<()> {
 
     // run our app with hyper
     // `axum::Server` is a re-export of `hyper::Server`
-    let addr = SocketAddr::from(([0, 0, 0, 0], 42070));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
@@ -83,6 +75,13 @@ async fn main() -> Result<()> {
     return Ok(());
 }
 
+/// See the tests below for which combinations of `foo` and `bar` result in
+/// which deserializations.
+///
+/// This example only shows one possible way to do this. [`serde_with`] provides
+/// another way. Use which ever method works best for you.
+///
+/// [`serde_with`]: https://docs.rs/serde_with/1.11.0/serde_with/rust/string_empty_as_none/index.html
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct JoinParams {
@@ -90,11 +89,13 @@ struct JoinParams {
     uuid: Option<Uuid>,
 }
 
-// async fn find_server(state: State) -> String {}
+async fn find_server(state: State) -> String {
+    return String::from("");
+}
 
 async fn handler(
     Query(params): Query<JoinParams>,
-    Extension(_state): Extension<State>,
+    Extension(state): Extension<State>,
 ) -> Result<String, AppError> {
     if let Some(v) = params.version {
         if v != VERSION {
@@ -106,8 +107,12 @@ async fn handler(
     if let None = params.uuid {
         return Err(anyhow::anyhow!("please provide a uuid").into());
     }
+
+    let server = find_server(state.clone());
+
     return Ok(format!("count is {:?}", params));
 }
+
 // Make our own error that wraps `anyhow::Error`.
 struct AppError(anyhow::Error);
 
